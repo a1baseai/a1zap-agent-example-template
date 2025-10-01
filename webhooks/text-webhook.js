@@ -12,7 +12,7 @@ async function textWebhookHandler(req, res) {
     console.log('Request body:', JSON.stringify(req.body, null, 2));
 
     // Extract webhook data
-    const { chat, message } = req.body;
+    const { chat, message, agent } = req.body;
 
     if (!chat?.id) {
       return res.status(400).json({
@@ -29,38 +29,58 @@ async function textWebhookHandler(req, res) {
     }
 
     const chatId = chat.id;
+    const agentId = agent?.id;
     const userMessage = message.content;
 
     console.log(`Processing message from chat ${chatId}: "${userMessage}"`);
 
-    // Fetch recent message history for current hand context
-    let conversationHistory = [];
-    try {
-      const history = await a1zapClient.getMessageHistory(chatId, 5); // Last 5 messages only
+    // Build conversation array starting with system prompt
+    const conversation = [];
 
-      // Convert to Gemini format, filter out empty messages
-      conversationHistory = history
-        .filter(msg => msg.content && msg.content.trim())
-        .map(msg => ({
-          role: msg.isAgent ? 'assistant' : 'user',
-          content: msg.content
-        }));
-    } catch (error) {
-      console.warn('Could not fetch message history:', error.message);
+    // Fetch message history (last 10 messages like OpenAI version)
+    let messageHistory = [];
+    if (chatId && agentId) {
+      try {
+        console.log('Fetching message history for chatId:', chatId);
+        const history = await a1zapClient.getMessageHistory(chatId, 10);
+
+        if (history && history.length > 0) {
+          messageHistory = history;
+          console.log(`Retrieved ${messageHistory.length} messages from history`);
+
+          // Convert message history to conversation format
+          messageHistory.forEach(msg => {
+            if (msg.content && typeof msg.content === 'string' && msg.content.trim()) {
+              const role = msg.isAgent || msg.senderId === agentId ? 'assistant' : 'user';
+              const content = msg.senderName && !msg.isAgent
+                ? `${msg.senderName}: ${msg.content}`
+                : msg.content;
+
+              conversation.push({
+                role: role,
+                content: String(content)
+              });
+            }
+          });
+        }
+      } catch (error) {
+        console.warn('Failed to fetch message history:', error.message);
+        // Continue without history - don't fail the entire request
+      }
     }
+
+    // Add the current message to conversation
+    conversation.push({ role: 'user', content: String(userMessage) });
 
     // Generate response using Gemini with conversation context
     console.log('Generating response with Gemini...');
-    const response = conversationHistory.length > 0
-      ? await geminiService.chat(
-          [...conversationHistory, { role: 'user', content: userMessage }],
-          {
-            ...pokerCoach.generationOptions,
-            systemInstruction: { text: pokerCoach.systemPrompt }
-          }
-        )
+    const response = conversation.length > 1
+      ? await geminiService.chat(conversation, {
+          ...pokerCoach.generationOptions,
+          systemInstruction: pokerCoach.systemPrompt
+        })
       : await geminiService.generateText(
-          `${pokerCoach.systemPrompt}\n\nCurrent Hand: ${userMessage}\n\nAdvice:`,
+          `${pokerCoach.systemPrompt}\n\nUser: ${userMessage}\n\nAdvice:`,
           pokerCoach.generationOptions
         );
 

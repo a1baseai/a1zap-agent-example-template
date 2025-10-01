@@ -94,18 +94,33 @@ class GeminiService {
    */
   async chat(messages, options = {}) {
     try {
+      const model = this.genAI.getGenerativeModel({
+        model: options.model || config.gemini.defaultModel,
+        systemInstruction: options.systemInstruction
+      });
+
+      const generationConfig = {
+        temperature: options.temperature || config.gemini.temperature,
+        maxOutputTokens: options.maxOutputTokens || config.gemini.maxOutputTokens,
+        topP: options.topP || 0.95,
+        topK: options.topK || 40
+      };
+
       // Convert messages to Gemini format
       const history = messages.slice(0, -1).map(msg => ({
         role: msg.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: msg.content }]
       }));
 
-      const lastMessage = messages[messages.length - 1];
-
-      return await this.generateText(lastMessage.content, {
-        ...options,
+      const chat = model.startChat({
+        generationConfig,
         history
       });
+
+      const lastMessage = messages[messages.length - 1];
+      const result = await chat.sendMessage(lastMessage.content);
+      const response = await result.response;
+      return response.text();
     } catch (error) {
       console.error('Gemini chat error:', error);
       throw error;
