@@ -86,14 +86,25 @@ async function textWebhookHandler(req, res) {
 
     console.log('Generated response:', response);
 
-    // Send response back to A1Zap
-    await a1zapClient.sendMessage(chatId, response);
+    // Send response back to A1Zap (skip for test chats)
+    let sendResult = null;
+    if (!chatId.startsWith('test-')) {
+      try {
+        sendResult = await a1zapClient.sendMessage(chatId, response);
+      } catch (sendError) {
+        console.error('Failed to send message to A1Zap:', sendError.message);
+        // Don't fail the request if sending fails
+      }
+    } else {
+      console.log('⚠️  Test mode: Skipping A1Zap send');
+    }
 
     // Return success
     res.json({
       success: true,
       agent: pokerCoach.name,
-      response: response
+      response: response,
+      testMode: chatId.startsWith('test-')
     });
 
   } catch (error) {
