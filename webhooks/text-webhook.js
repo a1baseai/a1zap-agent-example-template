@@ -33,35 +33,16 @@ async function textWebhookHandler(req, res) {
 
     console.log(`Processing message from chat ${chatId}: "${userMessage}"`);
 
-    // Optional: Fetch message history for context
-    let conversationHistory = [];
-    try {
-      const history = await a1zapClient.getMessageHistory(chatId, 10);
-
-      // Convert to Gemini format
-      conversationHistory = history
-        .filter(msg => msg.content && msg.content.trim())
-        .map(msg => ({
-          role: msg.isAgent ? 'assistant' : 'user',
-          content: msg.content
-        }));
-    } catch (error) {
-      console.warn('Could not fetch message history:', error.message);
-    }
-
     // Build full prompt with system instructions
     const fullPrompt = `${pokerCoach.systemPrompt}
 
-User Question: ${userMessage}`;
+Current Hand: ${userMessage}
 
-    // Generate response using Gemini
+Provide your instant advice now:`;
+
+    // Generate response using Gemini (NO history for poker coach)
     console.log('Generating response with Gemini...');
-    const response = conversationHistory.length > 0
-      ? await geminiService.chat(
-          [...conversationHistory, { role: 'user', content: userMessage }],
-          pokerCoach.generationOptions
-        )
-      : await geminiService.generateText(fullPrompt, pokerCoach.generationOptions);
+    const response = await geminiService.generateText(fullPrompt, pokerCoach.generationOptions);
 
     console.log('Generated response:', response);
 
