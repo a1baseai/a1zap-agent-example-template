@@ -120,7 +120,7 @@ IMPORTANT: Never start your responses with your name "Ace the Poker Coach:" - re
   // Gemini generation options
   generationOptions: {
     temperature: 0.7,
-    maxOutputTokens: 300, // Allow for more explanation
+    maxOutputTokens: 8192, // Let Gemini decide based on prompt
     topP: 0.9
   }
 };
